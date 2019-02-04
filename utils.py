@@ -72,7 +72,7 @@ def write_to_csv(df, name):
     df.to_csv('data/'+name+'.tsv', index=False, sep='\t')
 
 
-def plot_section_distribution(patents, range_start=None, range_end=None):
+def plot_section_distribution(patents, range_start=None, range_end=None, name="plot_section_distribution"):
     if range_start is None:
         range_start = patents['date'].min()
     if range_end is None:
@@ -90,8 +90,9 @@ def plot_section_distribution(patents, range_start=None, range_end=None):
             shadow=True, startangle=90)
     ax1.axis('equal')
     # plt.show()
-    plt.savefig("fig/plot_section_distribution.png",
+    plt.savefig("fig/"+name+".png",
                 transparent=True)
+    plt.close()
 
 
 def plot_subsection_distribution(patents, range_start=None, range_end=None):
@@ -159,7 +160,7 @@ def plot_patent_section_in_time(patents):
 def read_original_patents():
     print("read original patent file")
     patents = pd.read_csv(
-        '../Data/patent.tsv',
+        'data/patent.tsv',
         sep='\t',
         error_bad_lines=False,
         dtype={
@@ -175,7 +176,7 @@ def read_original_patents():
 def read_sampled_original_patents(perc=0.5):
     print("read sampled original patent file")
     patents = pd.read_csv(
-        '../Data/patent.tsv',
+        'data/patent.tsv',
         sep='\t',
         error_bad_lines=False,
         dtype={
@@ -192,7 +193,7 @@ def read_sampled_original_patents(perc=0.5):
 def read_original_patent_classification():
     print("read original classification")
     patent_classification = pd.read_csv(
-        '../Data/cpc_current.tsv',
+        'data/cpc_current.tsv',
         sep='\t',
         dtype={
             'patent_id': 'object'
@@ -205,7 +206,7 @@ def read_original_patent_classification():
 def read_sampled_original_patent_classification(patents):
     print("read sampled original classification")
     patent_classification = pd.read_csv(
-        '../Data/cpc_current.tsv',
+        'data/cpc_current.tsv',
         sep='\t',
         dtype={
             'patent_id': 'object'
@@ -221,7 +222,7 @@ def read_sampled_original_patent_classification(patents):
 def read_original_uspatentcitation():
     print("read original uspatentcitation")
     uspatentcitation = pd.read_csv(
-        '../Data/uspatentcitation.tsv',
+        'data/uspatentcitation.tsv',
         sep='\t',
         error_bad_lines=False,
         dtype={
@@ -236,7 +237,7 @@ def read_original_uspatentcitation():
 def read_sampled_original_uspatentcitation(patents):
     print("read sampled original uspatentcitation")
     uspatentcitation = pd.read_csv(
-        '../Data/uspatentictation.tsv',
+        'data/uspatentictation.tsv',
         sep='\t',
         error_bad_lines=False,
         dtype={
@@ -276,7 +277,7 @@ def read_sampled_patents():
         sep='\t',
         error_bad_lines=False,
         dtype={'id': 'object', 'number': 'object'},
-        skiprows=lambda i: i > 0 and random.random() > 0.5
+        skiprows=lambda i: i > 0 and random.random() > 0.01
     )
     patents.sort_values(by='date', inplace=True)
     print("len(patents)", len(patents))
@@ -322,7 +323,7 @@ def read_uspatentcitation():
 def read_sampled_uspatentcitation(patents):
     print("read sampled uspatentcitations")
     uspatentcitation = pd.read_csv(
-        'data/trimmed_uspatentcitation.tsv',
+        'data/trimmed_uspatentcitations.tsv',
         sep='\t',
         error_bad_lines=False,
         dtype={'patent_id': 'object', 'citation_id': 'object'},
@@ -620,8 +621,13 @@ def igraph_classify_train_test_graph(subgraphs, num_subgraphs, range_patents, ra
         if len(cmp_train_patents) > 0:
             prevision = cmp_train_patents.groupby('section_id').size().idxmax()
             print("prevision", prevision)
-            for row in cmp_test_patents.number.tolist():
-                global_assigned_patents[row]['forecast_section_id'] = prevision
+            sbg.vs["forecast_section_id"] = prevision
+            print("forecast section id", sbg.vs["forecast_section_id"])
+            # for row in cmp_test_patents.number.tolist():
+            #     global_assigned_patents[row]['forecast_section_id'] = prevision
+            if count <= 10:
+                plot_subgraph(sbg, name="prop_"+str(count), selection="section_id")
+                plot_subgraph(sbg, name="prop_" + str(count), selection="forecast_section_id")
         print("_________________________________")
         count += 1
     sections = sorted(range_patents['section_id'].drop_duplicates())
@@ -717,6 +723,26 @@ def igraph_classify_whole_graph(subgraphs, num_subgraphs, patents):
     return global_assigned_patents
 
 
+def plot_subgraph(sbg, name="test", selection="section_id", folder="test"):
+    print("plot subgraph", igraph.summary(sbg))
+    color_dict = {
+        "A": "lime",
+        "B": "red",
+        "C": "gold",
+        "D": "darkgreen",
+        "E": "slategray",
+        "F": "blue",
+        "G": "black",
+        "H": "white"
+    }
+    sbg.vs["color"] = [color_dict[section_id] for section_id in sbg.vs[selection]]
+    print("set layout")
+    # layout = sbg.layout("drl")
+    print("plot")
+    # igraph.plot(sbg, 'fig/'+name+'.png', layout=layout)
+    igraph.plot(sbg, 'fig/' + folder + '/' + name + '.png')
+
+
 class Range:
     min_date = ''
     # min_date_datetime = ''
@@ -729,6 +755,7 @@ class Range:
     train_end = ''
     # train_end_datetime = ''
     total_years = ''
+    previous_range_end = ''
 
     def __init__(self, delta, train_percentage, min_date, max_date):
         test_percentage = 1 - train_percentage
@@ -748,6 +775,8 @@ class Range:
 
     def increase(self, delta, train_percentage):
         test_percentage = 1 - train_percentage
+
+        self.previous_range_end = self.range_end
 
         self.range_start = self.range_end + timedelta(days=1)
 
